@@ -2,8 +2,11 @@ package com.edvexa.gateway.routing;
 
 import com.edvexa.gateway.common.error.CircuitBreakerOpenException;
 import com.edvexa.gateway.common.error.DownstreamTimeoutException;
+import com.edvexa.gateway.common.error.IdempotencyConflictException;
 import com.edvexa.gateway.common.error.ResourceNotFoundException;
 import com.edvexa.gateway.common.error.ServiceUnavailableException;
+import com.edvexa.gateway.idempotency.IdempotencyCheckResult;
+import com.edvexa.gateway.idempotency.IdempotencyService;
 import com.edvexa.gateway.observability.CorrelationIdContext;
 import com.edvexa.gateway.observability.RequestAuditService;
 import com.edvexa.gateway.registry.ServiceEntity;
@@ -37,6 +40,7 @@ public class GatewayRoutingService {
     private final CircuitBreakerService circuitBreakerService;
     private final RetryPolicyService retryPolicyService;
     private final RequestAuditService requestAuditService;
+    private final IdempotencyService idempotencyService;
 
     public GatewayRoutingService(
             ServiceRepository serviceRepository,
@@ -44,7 +48,8 @@ public class GatewayRoutingService {
             DownstreamClientProvider clientProvider,
             CircuitBreakerService circuitBreakerService,
             RetryPolicyService retryPolicyService,
-            RequestAuditService requestAuditService
+            RequestAuditService requestAuditService,
+            IdempotencyService idempotencyService
     ) {
         this.serviceRepository = serviceRepository;
         this.headerFilter = headerFilter;
@@ -52,6 +57,7 @@ public class GatewayRoutingService {
         this.circuitBreakerService = circuitBreakerService;
         this.retryPolicyService = retryPolicyService;
         this.requestAuditService = requestAuditService;
+        this.idempotencyService = idempotencyService;
     }
 
     public ResponseEntity<byte[]> forwardRequest(
@@ -85,10 +91,52 @@ public class GatewayRoutingService {
 
         String serviceId = service.getId();
 
-        // 2. Enforce Circuit Breaker state (Fail-fast if OPEN without making downstream calls)
+        // 2. Client-scoped Idempotency check for write operations (POST, PUT, PATCH, DELETE)
+        boolean isWriteMethod = List.of("POST", "PUT", "PATCH", "DELETE").contains(method.toUpperCase());
+        String idempotencyKey = request.getHeader(IdempotencyService.IDEMPOTENCY_KEY_HEADER);
+        if (idempotencyKey == null || idempotencyKey.isBlank()) {
+            idempotencyKey = request.getHeader("idempotency-key");
+        }
+        boolean hasIdempotencyKey = isWriteMethod && idempotencyKey != null && !idempotencyKey.isBlank();
+
+        if (hasIdempotencyKey) {
+            String fullPath = request.getQueryString() != null && !request.getQueryString().isBlank()
+                    ? requestPath + "?" + request.getQueryString()
+                    : requestPath;
+
+            IdempotencyCheckResult checkResult;
+            try {
+                checkResult = idempotencyService.processIdempotencyKey(
+                        clientId, idempotencyKey, method, fullPath, body
+                );
+            } catch (IdempotencyConflictException ex) {
+                long latency = System.currentTimeMillis() - startTime;
+                String currentState = circuitBreakerService.getCircuitBreakerState(serviceId);
+                requestAuditService.recordRequest(
+                        correlationId, clientId, serviceId, method, requestPath, 409, latency, 0, currentState, ex.getMessage()
+                );
+                throw ex;
+            }
+
+            if (checkResult.action() == IdempotencyCheckResult.Action.REPLAY) {
+                long latency = System.currentTimeMillis() - startTime;
+                String currentState = circuitBreakerService.getCircuitBreakerState(serviceId);
+                ResponseEntity<byte[]> cached = checkResult.cachedResponse();
+                requestAuditService.recordRequest(
+                        correlationId, clientId, serviceId, method, requestPath,
+                        cached.getStatusCode().value(), latency, 0, currentState, null
+                );
+                return cached;
+            }
+        }
+
+        // 3. Enforce Circuit Breaker state (Fail-fast if OPEN without making downstream calls)
         try {
             circuitBreakerService.checkCallPermitted(serviceId, service.getName());
         } catch (CircuitBreakerOpenException ex) {
+            if (hasIdempotencyKey) {
+                idempotencyService.abortOperation(clientId, idempotencyKey);
+            }
             long latency = System.currentTimeMillis() - startTime;
             requestAuditService.recordRequest(
                     correlationId, clientId, serviceId, method, requestPath, 503, latency, 0, "OPEN", ex.getMessage()
@@ -96,14 +144,14 @@ public class GatewayRoutingService {
             throw ex;
         }
 
-        // 3. Prepare target URI, headers, and per-service configured HTTP client
+        // 4. Prepare target URI, headers, and per-service configured HTTP client
         URI targetUri = buildDownstreamUri(service, subpath, request.getQueryString());
         HttpHeaders forwardHeaders = headerFilter.filterHeaders(request.getHeaderNames(), request::getHeaders);
         RestClient restClient = clientProvider.getRestClientForService(service);
 
         log.debug("Routing request correlationId={} to targetUri={}", correlationId, targetUri);
 
-        // 4. Forward request with bounded retry and circuit breaker tracking
+        // 5. Forward request with bounded retry, circuit breaker tracking, and idempotency completion
         int retriesRecorded = 0;
         try {
             RetryPolicyService.RetryExecutionResult<ResponseEntity<byte[]>> executionResult =
@@ -149,18 +197,32 @@ public class GatewayRoutingService {
 
             retriesRecorded = executionResult.retries();
             ResponseEntity<byte[]> response = executionResult.result();
+            int statusCode = response.getStatusCode().value();
+
+            if (hasIdempotencyKey) {
+                if (statusCode < 500) {
+                    idempotencyService.completeOperation(
+                            clientId, idempotencyKey, statusCode, response.getHeaders(), response.getBody()
+                    );
+                } else {
+                    idempotencyService.abortOperation(clientId, idempotencyKey);
+                }
+            }
 
             long totalLatency = System.currentTimeMillis() - startTime;
             String currentState = circuitBreakerService.getCircuitBreakerState(serviceId);
 
             requestAuditService.recordRequest(
                     correlationId, clientId, serviceId, method, requestPath,
-                    response.getStatusCode().value(), totalLatency, retriesRecorded, currentState, null
+                    statusCode, totalLatency, retriesRecorded, currentState, null
             );
 
             return response;
 
         } catch (ResourceAccessException ex) {
+            if (hasIdempotencyKey) {
+                idempotencyService.abortOperation(clientId, idempotencyKey);
+            }
             long totalLatency = System.currentTimeMillis() - startTime;
             String currentState = circuitBreakerService.getCircuitBreakerState(serviceId);
             requestAuditService.recordRequest(
@@ -169,6 +231,15 @@ public class GatewayRoutingService {
             throw new DownstreamTimeoutException("Downstream request timed out or was unreachable: " + ex.getMessage());
 
         } catch (HttpStatusCodeException ex) {
+            if (hasIdempotencyKey) {
+                if (ex.getStatusCode().value() < 500) {
+                    idempotencyService.completeOperation(
+                            clientId, idempotencyKey, ex.getStatusCode().value(), ex.getResponseHeaders(), ex.getResponseBodyAsByteArray()
+                    );
+                } else {
+                    idempotencyService.abortOperation(clientId, idempotencyKey);
+                }
+            }
             long totalLatency = System.currentTimeMillis() - startTime;
             String currentState = circuitBreakerService.getCircuitBreakerState(serviceId);
             int statusCode = ex.getStatusCode().value();
@@ -183,6 +254,9 @@ public class GatewayRoutingService {
                     .body(ex.getResponseBodyAsByteArray());
 
         } catch (CircuitBreakerOpenException ex) {
+            if (hasIdempotencyKey) {
+                idempotencyService.abortOperation(clientId, idempotencyKey);
+            }
             long totalLatency = System.currentTimeMillis() - startTime;
             requestAuditService.recordRequest(
                     correlationId, clientId, serviceId, method, requestPath, 503, totalLatency, retriesRecorded, "OPEN", ex.getMessage()
@@ -190,6 +264,9 @@ public class GatewayRoutingService {
             throw ex;
 
         } catch (Exception ex) {
+            if (hasIdempotencyKey) {
+                idempotencyService.abortOperation(clientId, idempotencyKey);
+            }
             long totalLatency = System.currentTimeMillis() - startTime;
             String currentState = circuitBreakerService.getCircuitBreakerState(serviceId);
             requestAuditService.recordRequest(
