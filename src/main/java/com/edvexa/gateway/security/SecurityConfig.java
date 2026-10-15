@@ -52,7 +52,8 @@ public class SecurityConfig {
                                 "/swagger-ui.html",
                                 "/v3/api-docs/**",
                                 "/api/v1/auth/**",
-                                "/api/v1/simulated/**"
+                                "/api/v1/simulated/**",
+                                "/gateway/**"
                         ).permitAll()
                         .anyRequest().permitAll() // Milestone 1 foundation: will be tightened in Milestone 4 with JWT/API-key filters
                 );
