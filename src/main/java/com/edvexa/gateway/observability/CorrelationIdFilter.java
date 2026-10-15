@@ -22,6 +22,9 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
             FilterChain filterChain
     ) throws ServletException, IOException {
         String incomingId = request.getHeader(CorrelationIdContext.CORRELATION_ID_HEADER);
+        if (incomingId == null || incomingId.isBlank()) {
+            incomingId = request.getHeader("x-correlation-id");
+        }
         String correlationId = CorrelationIdContext.getOrGenerate(incomingId);
 
         CorrelationIdContext.set(correlationId);
