@@ -64,8 +64,10 @@ class CircuitBreakerServiceTest {
         circuitBreakerService.recordFailure(serviceId, 10, new RuntimeException("Downstream 500"));
         assertThat(circuitBreakerService.getCircuitBreakerState(serviceId)).isEqualTo("OPEN");
 
-        // Wait for open wait duration (150ms) to elapse
-        Thread.sleep(200);
+        // Wait for open wait duration (150ms) to elapse and transition to HALF_OPEN
+        for (int i = 0; i < 20 && circuitBreakerService.getCircuitBreaker(serviceId).getState() == CircuitBreaker.State.OPEN; i++) {
+            Thread.sleep(50);
+        }
 
         // Transition to HALF_OPEN occurs automatically or upon check
         CircuitBreaker cb = circuitBreakerService.getCircuitBreaker(serviceId);
