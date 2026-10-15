@@ -5,6 +5,10 @@ import com.edvexa.gateway.observability.GatewayRequestLogEntity;
 import com.edvexa.gateway.observability.GatewayRequestLogRepository;
 import com.edvexa.gateway.registry.ServiceEntity;
 import com.edvexa.gateway.registry.ServiceRepository;
+import com.edvexa.gateway.security.apikey.ApiKeyRepository;
+import com.edvexa.gateway.security.apikey.ApiKeyService;
+import com.edvexa.gateway.security.apikey.dto.ApiKeyCreatedResponse;
+import com.edvexa.gateway.security.apikey.dto.CreateApiKeyRequest;
 import com.edvexa.gateway.simulator.OrderSimulatorService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -48,15 +52,28 @@ class GatewayRoutingIntegrationTest {
     private OrderSimulatorService orderSimulatorService;
 
     @Autowired
+    private ApiKeyRepository apiKeyRepository;
+
+    @Autowired
+    private ApiKeyService apiKeyService;
+
+    @Autowired
     private ObjectMapper objectMapper;
 
     private String orderServiceId;
+    private String testApiKey;
 
     @BeforeEach
     void setUp() {
         logRepository.deleteAll();
         serviceRepository.deleteAll();
+        apiKeyRepository.deleteAll();
         orderSimulatorService.reset();
+
+        ApiKeyCreatedResponse keyResponse = apiKeyService.createApiKey(
+                new CreateApiKeyRequest("client-evaluator", 100)
+        );
+        testApiKey = keyResponse.getApiKey();
 
         ServiceEntity orderService = new ServiceEntity(
                 "srv-order-test",
@@ -71,11 +88,16 @@ class GatewayRoutingIntegrationTest {
         orderServiceId = orderService.getId();
     }
 
+    private HttpHeaders createHeaders() {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("X-API-Key", testApiKey);
+        return headers;
+    }
+
     @Test
     void shouldForwardGetRequestToDownstreamServiceAndRecordAudit() {
-        HttpHeaders headers = new HttpHeaders();
+        HttpHeaders headers = createHeaders();
         headers.set("X-Correlation-ID", "corr-test-100");
-        headers.set("X-Client-ID", "client-evaluator");
 
         HttpEntity<Void> request = new HttpEntity<>(headers);
         ResponseEntity<String> response = restTemplate.exchange(
@@ -101,7 +123,7 @@ class GatewayRoutingIntegrationTest {
 
     @Test
     void shouldForwardPostRequestWithBodyToDownstreamService() {
-        HttpHeaders headers = new HttpHeaders();
+        HttpHeaders headers = createHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.set("X-Correlation-ID", "corr-test-200");
 
@@ -129,8 +151,11 @@ class GatewayRoutingIntegrationTest {
 
     @Test
     void shouldReturn404ForUnknownRouteAndRecordAudit() {
-        ResponseEntity<String> response = restTemplate.getForEntity(
+        HttpEntity<Void> request = new HttpEntity<>(createHeaders());
+        ResponseEntity<String> response = restTemplate.exchange(
                 "/gateway/unknown/endpoint",
+                HttpMethod.GET,
+                request,
                 String.class
         );
 
@@ -144,8 +169,11 @@ class GatewayRoutingIntegrationTest {
         service.setEnabled(false);
         serviceRepository.save(service);
 
-        ResponseEntity<String> response = restTemplate.getForEntity(
+        HttpEntity<Void> request = new HttpEntity<>(createHeaders());
+        ResponseEntity<String> response = restTemplate.exchange(
                 "/gateway/orders",
+                HttpMethod.GET,
+                request,
                 String.class
         );
 
@@ -160,8 +188,11 @@ class GatewayRoutingIntegrationTest {
                 0, 0.0, 503, 1
         ));
 
-        ResponseEntity<String> response = restTemplate.getForEntity(
+        HttpEntity<Void> request = new HttpEntity<>(createHeaders());
+        ResponseEntity<String> response = restTemplate.exchange(
                 "/gateway/orders",
+                HttpMethod.GET,
+                request,
                 String.class
         );
 
