@@ -20,7 +20,7 @@ public class AdminBootstrapService implements ApplicationRunner {
     @Value("${gateway.security.admin.initial-username:admin}")
     private String initialUsername;
 
-    @Value("${gateway.security.admin.initial-password:AdminPass123!}")
+    @Value("${gateway.security.admin.initial-password:}")
     private String initialPassword;
 
     public AdminBootstrapService(AdminUserRepository adminUserRepository, PasswordEncoder passwordEncoder) {
@@ -32,15 +32,19 @@ public class AdminBootstrapService implements ApplicationRunner {
     @Transactional
     public void run(ApplicationArguments args) {
         if (adminUserRepository.count() == 0) {
-            log.info("No administrative accounts found in database. Initializing bootstrap admin account: {}", initialUsername);
-            AdminUserEntity admin = new AdminUserEntity(
-                    initialUsername,
-                    passwordEncoder.encode(initialPassword),
-                    "ROLE_ADMIN",
-                    true
-            );
-            adminUserRepository.save(admin);
-            log.info("Bootstrap administrative account initialized successfully.");
+            if (initialPassword != null && !initialPassword.isBlank()) {
+                log.info("No administrative accounts found in database. Initializing bootstrap admin account from environment configuration: {}", initialUsername);
+                AdminUserEntity admin = new AdminUserEntity(
+                        initialUsername,
+                        passwordEncoder.encode(initialPassword),
+                        "ROLE_ADMIN",
+                        true
+                );
+                adminUserRepository.save(admin);
+                log.info("Bootstrap administrative account initialized successfully.");
+            } else {
+                log.info("No administrative accounts found in database. First administrator must be provisioned via POST /api/v1/auth/bootstrap with the configured bootstrap secret.");
+            }
         }
     }
 }
