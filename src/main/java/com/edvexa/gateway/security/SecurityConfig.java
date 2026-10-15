@@ -30,15 +30,18 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final com.edvexa.gateway.security.apikey.ApiKeyAuthenticationFilter apiKeyAuthenticationFilter;
+    private final com.edvexa.gateway.ratelimit.RateLimitingFilter rateLimitingFilter;
     private final ObjectMapper objectMapper;
 
     public SecurityConfig(
             JwtAuthenticationFilter jwtAuthenticationFilter,
             com.edvexa.gateway.security.apikey.ApiKeyAuthenticationFilter apiKeyAuthenticationFilter,
+            com.edvexa.gateway.ratelimit.RateLimitingFilter rateLimitingFilter,
             ObjectMapper objectMapper
     ) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.apiKeyAuthenticationFilter = apiKeyAuthenticationFilter;
+        this.rateLimitingFilter = rateLimitingFilter;
         this.objectMapper = objectMapper;
     }
 
@@ -110,7 +113,8 @@ public class SecurityConfig {
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-                .addFilterBefore(apiKeyAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(apiKeyAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(rateLimitingFilter, com.edvexa.gateway.security.apikey.ApiKeyAuthenticationFilter.class);
 
         return http.build();
     }
