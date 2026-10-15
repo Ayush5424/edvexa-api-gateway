@@ -29,10 +29,16 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final com.edvexa.gateway.security.apikey.ApiKeyAuthenticationFilter apiKeyAuthenticationFilter;
     private final ObjectMapper objectMapper;
 
-    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter, ObjectMapper objectMapper) {
+    public SecurityConfig(
+            JwtAuthenticationFilter jwtAuthenticationFilter,
+            com.edvexa.gateway.security.apikey.ApiKeyAuthenticationFilter apiKeyAuthenticationFilter,
+            ObjectMapper objectMapper
+    ) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+        this.apiKeyAuthenticationFilter = apiKeyAuthenticationFilter;
         this.objectMapper = objectMapper;
     }
 
@@ -100,10 +106,11 @@ public class SecurityConfig {
                                 "/test/**"
                         ).permitAll()
                         // Protected administrative endpoints requiring ROLE_ADMIN
-                        .requestMatchers("/api/v1/services/**", "/api/v1/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/api/v1/services/**", "/api/v1/admin/**", "/api/v1/api-keys/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(apiKeyAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
