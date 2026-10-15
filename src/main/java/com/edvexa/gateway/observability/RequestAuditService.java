@@ -1,10 +1,14 @@
 package com.edvexa.gateway.observability;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class RequestAuditService {
@@ -12,9 +16,15 @@ public class RequestAuditService {
     private static final Logger log = LoggerFactory.getLogger("com.edvexa.gateway.audit");
 
     private final GatewayRequestLogRepository logRepository;
+    private MeterRegistry meterRegistry;
 
     public RequestAuditService(GatewayRequestLogRepository logRepository) {
         this.logRepository = logRepository;
+    }
+
+    @Autowired(required = false)
+    public void setMeterRegistry(MeterRegistry meterRegistry) {
+        this.meterRegistry = meterRegistry;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -45,6 +55,27 @@ public class RequestAuditService {
                 circuitBreakerState != null ? circuitBreakerState : "N/A",
                 outcome
         );
+
+        if (meterRegistry != null) {
+            try {
+                String safeService = serviceId != null ? serviceId : "none";
+                String safeClient = clientId != null ? clientId : "anonymous";
+                meterRegistry.counter("gateway.requests.total", "service", safeService, "method", httpMethod, "outcome", outcome).increment();
+                meterRegistry.timer("gateway.requests.latency", "service", safeService).record(latencyMs, TimeUnit.MILLISECONDS);
+                if (retryCount > 0) {
+                    meterRegistry.counter("gateway.requests.retries", "service", safeService).increment(retryCount);
+                }
+                if ("TIMEOUT".equalsIgnoreCase(outcome)) {
+                    meterRegistry.counter("gateway.requests.timeouts", "service", safeService).increment();
+                } else if ("CIRCUIT_OPEN".equalsIgnoreCase(outcome)) {
+                    meterRegistry.counter("gateway.requests.circuit_open", "service", safeService).increment();
+                } else if ("RATE_LIMITED".equalsIgnoreCase(outcome)) {
+                    meterRegistry.counter("gateway.requests.rate_limited", "client", safeClient).increment();
+                }
+            } catch (Exception ex) {
+                log.warn("Failed to record actuator metric: {}", ex.getMessage());
+            }
+        }
 
         GatewayRequestLogEntity entity = new GatewayRequestLogEntity(
                 correlationId,

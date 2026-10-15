@@ -23,9 +23,36 @@ public interface GatewayRequestLogRepository extends JpaRepository<GatewayReques
 
     long countByOutcomeCategory(String outcomeCategory);
 
+    @Query("SELECT r FROM GatewayRequestLogEntity r WHERE r.statusCode >= 400 OR r.outcomeCategory != 'SUCCESS' ORDER BY r.timestamp DESC")
+    Page<GatewayRequestLogEntity> findRecentFailures(Pageable pageable);
+
+    @Query("SELECT r FROM GatewayRequestLogEntity r WHERE " +
+            "(:serviceId IS NULL OR r.serviceId = :serviceId) AND " +
+            "(:clientId IS NULL OR r.clientId = :clientId) AND " +
+            "(:outcome IS NULL OR r.outcomeCategory = :outcome) " +
+            "ORDER BY r.timestamp DESC")
+    Page<GatewayRequestLogEntity> findFilteredLogs(
+            @Param("serviceId") String serviceId,
+            @Param("clientId") String clientId,
+            @Param("outcome") String outcome,
+            Pageable pageable
+    );
+
     @Query("SELECT r FROM GatewayRequestLogEntity r WHERE r.timestamp >= :since ORDER BY r.timestamp DESC")
     List<GatewayRequestLogEntity> findRecentLogs(@Param("since") Instant since);
 
-    @Query("SELECT r.serviceId, COUNT(r) FROM GatewayRequestLogEntity r GROUP BY r.serviceId")
+    @Query("SELECT r.serviceId, COUNT(r) FROM GatewayRequestLogEntity r WHERE r.serviceId IS NOT NULL GROUP BY r.serviceId")
     List<Object[]> countRequestsByService();
+
+    @Query("SELECT r.clientId, COUNT(r) FROM GatewayRequestLogEntity r WHERE r.clientId IS NOT NULL GROUP BY r.clientId")
+    List<Object[]> countRequestsByClient();
+
+    @Query("SELECT r.outcomeCategory, COUNT(r) FROM GatewayRequestLogEntity r GROUP BY r.outcomeCategory")
+    List<Object[]> countRequestsByOutcome();
+
+    @Query("SELECT COALESCE(SUM(r.retryCount), 0) FROM GatewayRequestLogEntity r")
+    long sumTotalRetries();
+
+    @Query("SELECT r.latencyMs FROM GatewayRequestLogEntity r")
+    List<Long> findAllLatencies();
 }

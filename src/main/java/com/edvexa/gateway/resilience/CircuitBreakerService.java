@@ -70,9 +70,38 @@ public class CircuitBreakerService {
         });
     }
 
+    public record CircuitBreakerDetails(
+            String state,
+            float failureRate,
+            float slowCallRate,
+            int numberOfBufferedCalls,
+            int numberOfFailedCalls,
+            int numberOfSuccessfulCalls,
+            long numberOfNotPermittedCalls
+    ) {}
+
     public String getCircuitBreakerState(String serviceId) {
         CircuitBreaker cb = breakers.get(serviceId);
         return cb != null ? cb.getState().name() : CircuitBreaker.State.CLOSED.name();
+    }
+
+    public CircuitBreakerDetails getCircuitBreakerDetails(String serviceId) {
+        CircuitBreaker cb = breakers.get(serviceId);
+        if (cb == null) {
+            return new CircuitBreakerDetails(CircuitBreaker.State.CLOSED.name(), 0.0f, 0.0f, 0, 0, 0, 0L);
+        }
+        CircuitBreaker.Metrics m = cb.getMetrics();
+        float failureRate = m.getFailureRate() < 0 ? 0.0f : m.getFailureRate();
+        float slowCallRate = m.getSlowCallRate() < 0 ? 0.0f : m.getSlowCallRate();
+        return new CircuitBreakerDetails(
+                cb.getState().name(),
+                failureRate,
+                slowCallRate,
+                m.getNumberOfBufferedCalls(),
+                m.getNumberOfFailedCalls(),
+                m.getNumberOfSuccessfulCalls(),
+                m.getNumberOfNotPermittedCalls()
+        );
     }
 
     public void checkCallPermitted(String serviceId, String serviceName) {
