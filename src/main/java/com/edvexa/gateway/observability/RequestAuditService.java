@@ -69,14 +69,17 @@ public class RequestAuditService {
     }
 
     public String determineOutcomeCategory(int statusCode, String circuitBreakerState, String errorMessage) {
-        if ("OPEN".equalsIgnoreCase(circuitBreakerState) || (errorMessage != null && errorMessage.contains("Circuit breaker is OPEN"))) {
+        if (errorMessage != null && errorMessage.contains("Circuit breaker is OPEN")) {
             return "CIRCUIT_OPEN";
+        }
+        if (statusCode == 504 || (errorMessage != null && errorMessage.toLowerCase().contains("timeout"))) {
+            return "TIMEOUT";
         }
         if (statusCode == 429 || "RATE_LIMITED".equalsIgnoreCase(errorMessage)) {
             return "RATE_LIMITED";
         }
-        if (statusCode == 504 || (errorMessage != null && errorMessage.toLowerCase().contains("timeout"))) {
-            return "TIMEOUT";
+        if ("OPEN".equalsIgnoreCase(circuitBreakerState) && statusCode == 503) {
+            return "CIRCUIT_OPEN";
         }
         if (statusCode >= 200 && statusCode < 400) {
             return "SUCCESS";

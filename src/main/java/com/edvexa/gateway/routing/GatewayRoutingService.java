@@ -1,5 +1,6 @@
 package com.edvexa.gateway.routing;
 
+import com.edvexa.gateway.common.error.CircuitBreakerOpenException;
 import com.edvexa.gateway.common.error.DownstreamTimeoutException;
 import com.edvexa.gateway.common.error.ResourceNotFoundException;
 import com.edvexa.gateway.common.error.ServiceUnavailableException;
@@ -7,6 +8,9 @@ import com.edvexa.gateway.observability.CorrelationIdContext;
 import com.edvexa.gateway.observability.RequestAuditService;
 import com.edvexa.gateway.registry.ServiceEntity;
 import com.edvexa.gateway.registry.ServiceRepository;
+import com.edvexa.gateway.resilience.CircuitBreakerService;
+import com.edvexa.gateway.resilience.DownstreamClientProvider;
+import com.edvexa.gateway.resilience.RetryPolicyService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,18 +33,24 @@ public class GatewayRoutingService {
 
     private final ServiceRepository serviceRepository;
     private final HopByHopHeaderFilter headerFilter;
-    private final RestClient.Builder restClientBuilder;
+    private final DownstreamClientProvider clientProvider;
+    private final CircuitBreakerService circuitBreakerService;
+    private final RetryPolicyService retryPolicyService;
     private final RequestAuditService requestAuditService;
 
     public GatewayRoutingService(
             ServiceRepository serviceRepository,
             HopByHopHeaderFilter headerFilter,
-            RestClient.Builder restClientBuilder,
+            DownstreamClientProvider clientProvider,
+            CircuitBreakerService circuitBreakerService,
+            RetryPolicyService retryPolicyService,
             RequestAuditService requestAuditService
     ) {
         this.serviceRepository = serviceRepository;
         this.headerFilter = headerFilter;
-        this.restClientBuilder = restClientBuilder;
+        this.clientProvider = clientProvider;
+        this.circuitBreakerService = circuitBreakerService;
+        this.retryPolicyService = retryPolicyService;
         this.requestAuditService = requestAuditService;
     }
 
@@ -73,65 +83,119 @@ public class GatewayRoutingService {
             throw new ServiceUnavailableException("Service '" + service.getName() + "' is currently disabled");
         }
 
-        // 2. Build target downstream URI
+        String serviceId = service.getId();
+
+        // 2. Enforce Circuit Breaker state (Fail-fast if OPEN without making downstream calls)
+        try {
+            circuitBreakerService.checkCallPermitted(serviceId, service.getName());
+        } catch (CircuitBreakerOpenException ex) {
+            long latency = System.currentTimeMillis() - startTime;
+            requestAuditService.recordRequest(
+                    correlationId, clientId, serviceId, method, requestPath, 503, latency, 0, "OPEN", ex.getMessage()
+            );
+            throw ex;
+        }
+
+        // 3. Prepare target URI, headers, and per-service configured HTTP client
         URI targetUri = buildDownstreamUri(service, subpath, request.getQueryString());
         HttpHeaders forwardHeaders = headerFilter.filterHeaders(request.getHeaderNames(), request::getHeaders);
+        RestClient restClient = clientProvider.getRestClientForService(service);
 
         log.debug("Routing request correlationId={} to targetUri={}", correlationId, targetUri);
 
-        RestClient restClient = restClientBuilder.build();
+        // 4. Forward request with bounded retry and circuit breaker tracking
+        int retriesRecorded = 0;
         try {
-            RestClient.RequestBodySpec requestSpec = restClient
-                    .method(HttpMethod.valueOf(method))
-                    .uri(targetUri)
-                    .headers(h -> h.addAll(forwardHeaders));
+            RetryPolicyService.RetryExecutionResult<ResponseEntity<byte[]>> executionResult =
+                    retryPolicyService.executeWithRetry(serviceId, () -> {
+                        long callStart = System.currentTimeMillis();
+                        try {
+                            RestClient.RequestBodySpec requestSpec = restClient
+                                    .method(HttpMethod.valueOf(method))
+                                    .uri(targetUri)
+                                    .headers(h -> h.addAll(forwardHeaders));
 
-            if (body != null && body.length > 0 && HttpMethod.valueOf(method) != HttpMethod.GET) {
-                requestSpec.body(body);
-            }
+                            if (body != null && body.length > 0 && HttpMethod.valueOf(method) != HttpMethod.GET) {
+                                requestSpec.body(body);
+                            }
 
-            ResponseEntity<byte[]> response = requestSpec.exchange((clientReq, clientResp) -> {
-                int rawStatusCode = clientResp.getStatusCode().value();
-                byte[] responseBytes = clientResp.getBody().readAllBytes();
+                            ResponseEntity<byte[]> response = requestSpec.exchange((clientReq, clientResp) -> {
+                                int rawStatusCode = clientResp.getStatusCode().value();
+                                byte[] responseBytes = clientResp.getBody().readAllBytes();
+                                HttpHeaders responseHeaders = headerFilter.filterDownstreamResponseHeaders(clientResp.getHeaders());
 
-                HttpHeaders responseHeaders = headerFilter.filterDownstreamResponseHeaders(clientResp.getHeaders());
-                return ResponseEntity.status(rawStatusCode)
-                        .headers(responseHeaders)
-                        .body(responseBytes);
-            });
+                                return ResponseEntity.status(rawStatusCode)
+                                        .headers(responseHeaders)
+                                        .body(responseBytes);
+                            });
 
-            long latency = System.currentTimeMillis() - startTime;
-            int statusCode = response.getStatusCode().value();
+                            long callDuration = System.currentTimeMillis() - callStart;
+                            int status = response.getStatusCode().value();
+
+                            if (status >= 500) {
+                                circuitBreakerService.recordFailure(serviceId, callDuration, new RuntimeException("HTTP " + status));
+                            } else {
+                                circuitBreakerService.recordSuccess(serviceId, callDuration);
+                            }
+
+                            return response;
+
+                        } catch (Exception ex) {
+                            long callDuration = System.currentTimeMillis() - callStart;
+                            circuitBreakerService.recordFailure(serviceId, callDuration, ex);
+                            throw ex;
+                        }
+                    });
+
+            retriesRecorded = executionResult.retries();
+            ResponseEntity<byte[]> response = executionResult.result();
+
+            long totalLatency = System.currentTimeMillis() - startTime;
+            String currentState = circuitBreakerService.getCircuitBreakerState(serviceId);
 
             requestAuditService.recordRequest(
-                    correlationId, clientId, service.getId(), method, requestPath, statusCode, latency, 0, "CLOSED", null
+                    correlationId, clientId, serviceId, method, requestPath,
+                    response.getStatusCode().value(), totalLatency, retriesRecorded, currentState, null
             );
 
             return response;
 
         } catch (ResourceAccessException ex) {
-            long latency = System.currentTimeMillis() - startTime;
+            long totalLatency = System.currentTimeMillis() - startTime;
+            String currentState = circuitBreakerService.getCircuitBreakerState(serviceId);
             requestAuditService.recordRequest(
-                    correlationId, clientId, service.getId(), method, requestPath, 504, latency, 0, "CLOSED", ex.getMessage()
+                    correlationId, clientId, serviceId, method, requestPath, 504, totalLatency, retriesRecorded, currentState, ex.getMessage()
             );
             throw new DownstreamTimeoutException("Downstream request timed out or was unreachable: " + ex.getMessage());
+
         } catch (HttpStatusCodeException ex) {
-            long latency = System.currentTimeMillis() - startTime;
+            long totalLatency = System.currentTimeMillis() - startTime;
+            String currentState = circuitBreakerService.getCircuitBreakerState(serviceId);
             int statusCode = ex.getStatusCode().value();
+
             requestAuditService.recordRequest(
-                    correlationId, clientId, service.getId(), method, requestPath, statusCode, latency, 0, "CLOSED", ex.getMessage()
+                    correlationId, clientId, serviceId, method, requestPath, statusCode, totalLatency, retriesRecorded, currentState, ex.getMessage()
             );
 
             HttpHeaders cleanHeaders = headerFilter.filterDownstreamResponseHeaders(ex.getResponseHeaders());
             return ResponseEntity.status(statusCode)
                     .headers(cleanHeaders)
                     .body(ex.getResponseBodyAsByteArray());
-        } catch (Exception ex) {
-            long latency = System.currentTimeMillis() - startTime;
+
+        } catch (CircuitBreakerOpenException ex) {
+            long totalLatency = System.currentTimeMillis() - startTime;
             requestAuditService.recordRequest(
-                    correlationId, clientId, service.getId(), method, requestPath, 500, latency, 0, "CLOSED", ex.getMessage()
+                    correlationId, clientId, serviceId, method, requestPath, 503, totalLatency, retriesRecorded, "OPEN", ex.getMessage()
             );
             throw ex;
+
+        } catch (Exception ex) {
+            long totalLatency = System.currentTimeMillis() - startTime;
+            String currentState = circuitBreakerService.getCircuitBreakerState(serviceId);
+            requestAuditService.recordRequest(
+                    correlationId, clientId, serviceId, method, requestPath, 500, totalLatency, retriesRecorded, currentState, ex.getMessage()
+            );
+            throw new RuntimeException(ex.getMessage(), ex);
         }
     }
 
@@ -139,7 +203,6 @@ public class GatewayRoutingService {
         String path = subpath.startsWith("/") ? subpath : "/" + subpath;
         List<ServiceEntity> services = serviceRepository.findAll();
 
-        // Match longest prefix first to avoid prefix collisions (e.g. /orders/v2 before /orders)
         return services.stream()
                 .filter(s -> path.startsWith(s.getPathPrefix()))
                 .max(Comparator.comparingInt(s -> s.getPathPrefix().length()))
@@ -155,7 +218,6 @@ public class GatewayRoutingService {
         String path = subpath.startsWith("/") ? subpath : "/" + subpath;
         String prefix = service.getPathPrefix();
 
-        // Extract subpath after service prefix
         String remaining = path.substring(prefix.length());
         if (!remaining.isEmpty() && !remaining.startsWith("/")) {
             remaining = "/" + remaining;
