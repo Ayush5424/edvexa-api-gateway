@@ -58,6 +58,9 @@ class GatewayRoutingIntegrationTest {
     private ApiKeyService apiKeyService;
 
     @Autowired
+    private com.edvexa.gateway.resilience.CircuitBreakerService circuitBreakerService;
+
+    @Autowired
     private ObjectMapper objectMapper;
 
     private String orderServiceId;
@@ -69,6 +72,7 @@ class GatewayRoutingIntegrationTest {
         serviceRepository.deleteAll();
         apiKeyRepository.deleteAll();
         orderSimulatorService.reset();
+        circuitBreakerService.resetAll();
 
         ApiKeyCreatedResponse keyResponse = apiKeyService.createApiKey(
                 new CreateApiKeyRequest("client-evaluator", 100)
@@ -90,6 +94,8 @@ class GatewayRoutingIntegrationTest {
 
     @org.junit.jupiter.api.AfterEach
     void tearDown() {
+        orderSimulatorService.reset();
+        circuitBreakerService.resetAll();
         logRepository.deleteAll();
         serviceRepository.deleteAll();
         apiKeyRepository.deleteAll();
@@ -190,9 +196,9 @@ class GatewayRoutingIntegrationTest {
 
     @Test
     void shouldPropagateDownstreamErrorsWithoutFabrication() {
-        // Configure order simulator to return 503
+        // Configure order simulator to return 503 across all retry attempts
         orderSimulatorService.updateConfig(new com.edvexa.gateway.simulator.dto.SimulatorConfigDto(
-                0, 0.0, 503, 1
+                0, 0.0, 503, 5
         ));
 
         HttpEntity<Void> request = new HttpEntity<>(createHeaders());
