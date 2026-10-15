@@ -17,7 +17,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest
 @ActiveProfiles("test")
 @Import(TestRedisConfig.class)
-@Transactional
 class ServiceRepositoryTest {
 
     @Autowired
@@ -25,6 +24,11 @@ class ServiceRepositoryTest {
 
     @BeforeEach
     void setUp() {
+        serviceRepository.deleteAll();
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void tearDown() {
         serviceRepository.deleteAll();
     }
 

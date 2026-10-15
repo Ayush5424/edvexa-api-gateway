@@ -98,6 +98,13 @@ class ApiKeyAuthenticationIntegrationTest {
         adminJwtToken = loginResponse.getBody().token();
     }
 
+    @org.junit.jupiter.api.AfterEach
+    void tearDown() {
+        logRepository.deleteAll();
+        serviceRepository.deleteAll();
+        apiKeyRepository.deleteAll();
+    }
+
     @Test
     @DisplayName("Should reject gateway request when X-API-Key header is missing")
     void shouldRejectGatewayRequestWhenApiKeyIsMissing() {

@@ -88,6 +88,13 @@ class GatewayRoutingIntegrationTest {
         orderServiceId = orderService.getId();
     }
 
+    @org.junit.jupiter.api.AfterEach
+    void tearDown() {
+        logRepository.deleteAll();
+        serviceRepository.deleteAll();
+        apiKeyRepository.deleteAll();
+    }
+
     private HttpHeaders createHeaders() {
         HttpHeaders headers = new HttpHeaders();
         headers.set("X-API-Key", testApiKey);
