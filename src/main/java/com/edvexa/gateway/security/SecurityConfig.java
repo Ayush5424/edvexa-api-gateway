@@ -96,7 +96,8 @@ public class SecurityConfig {
                                 "/v3/api-docs/**",
                                 "/api/v1/auth/login",
                                 "/api/v1/simulated/**",
-                                "/gateway/**"
+                                "/gateway/**",
+                                "/test/**"
                         ).permitAll()
                         // Protected administrative endpoints requiring ROLE_ADMIN
                         .requestMatchers("/api/v1/services/**", "/api/v1/admin/**").hasRole("ADMIN")
