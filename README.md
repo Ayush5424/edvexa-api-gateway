@@ -142,7 +142,9 @@ Key environment variables:
 | `REDIS_PORT` | Redis server port | `6379` |
 | `PORT` | Gateway server port | `8080` |
 | `JWT_SECRET` | 256-bit secret key for signing admin JWTs | Required (32+ chars) |
-| `GATEWAY_BOOTSTRAP_SECRET` | Secret token to authorize first administrator creation | Optional / Initial provisioning |
+| `GATEWAY_ADMIN_INITIAL_USERNAME` | Initial administrator username | `admin` |
+| `GATEWAY_ADMIN_INITIAL_PASSWORD` | Initial administrator password on first boot | Set securely in local `.env` |
+| `GATEWAY_BOOTSTRAP_SECRET` | Secret token to authorize first administrator creation | Optional / First-time setup |
 | `GATEWAY_ADMIN_RESET_PASSWORD` | Emergency password reset value | Leave empty during normal operation |
 
 ---
@@ -249,8 +251,51 @@ Interactive OpenAPI 3.0 documentation is enabled:
 
 ## 14. Authentication & Authorization Details
 
+### Administrator Account Provisioning and Setup
+
+To prevent hardcoded credentials from being committed to source control while ensuring project evaluators and new team members can seamlessly set up and access the platform, the gateway supports three configurable provisioning methods:
+
+#### Method 1: Interactive First-Time Setup Wizard (Web UI)
+1. Start the gateway backend and open the web dashboard at `http://localhost:3000`.
+2. If no administrator account exists in the database, the login screen automatically detects this and transitions into the **First-Time Administrator Setup** wizard.
+3. If `GATEWAY_BOOTSTRAP_SECRET` is defined in `.env`, enter the secret token.
+4. Input your desired administrator username and a password (minimum 8 characters).
+5. Click **Initialize & Sign In**. The backend securely hashes the password using BCrypt, persists the admin entity, returns a signed JWT token, and logs into the dashboard immediately.
+
+#### Method 2: Automatic Startup Provisioning (Docker / Headless Environments)
+Configure the initial administrator credentials in your local `.env` file before booting the service:
+```bash
+GATEWAY_ADMIN_INITIAL_USERNAME=admin
+GATEWAY_ADMIN_INITIAL_PASSWORD=YourSecurePassword123!
+```
+On initial startup, if the `admin_users` table is empty, `AdminBootstrapService` will automatically provision this account.
+
+#### Method 3: REST API Bootstrap
+Automated scripts or CI pipelines can provision the initial administrator via an authenticated HTTP request:
+```bash
+curl -X POST http://localhost:8080/api/v1/auth/bootstrap \
+  -H "Content-Type: application/json" \
+  -d '{
+    "bootstrapSecret": "your_bootstrap_secret_if_configured",
+    "username": "admin",
+    "password": "YourSecurePassword123!"
+  }'
+```
+
+#### Administrator Password Recovery / Reset
+If an administrator password needs to be changed or reset:
+1. Set `GATEWAY_ADMIN_RESET_PASSWORD=YourNewSecurePassword123!` in `.env`.
+2. Restart the gateway backend once.
+3. The password for `GATEWAY_ADMIN_INITIAL_USERNAME` is updated using BCrypt.
+4. Clear or comment out `GATEWAY_ADMIN_RESET_PASSWORD` after restart.
+
 ### Administrator JWT RBAC
-1. Obtain token via `POST /api/v1/auth/login` with administrative credentials.
+1. Obtain token via `POST /api/v1/auth/login` with administrative credentials:
+   ```bash
+   curl -X POST http://localhost:8080/api/v1/auth/login \
+     -H "Content-Type: application/json" \
+     -d '{"username": "admin", "password": "YourSecurePassword123!"}'
+   ```
 2. Provide token in subsequent calls: `Authorization: Bearer <token>`.
 3. Validated on every administrative route (`/api/v1/services/**`, `/api/v1/api-keys/**`, `/api/v1/admin/**`).
 

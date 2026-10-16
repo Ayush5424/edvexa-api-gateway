@@ -63,7 +63,8 @@ public class AuthController {
         boolean bootstrapConfigured = authService.isBootstrapConfigured();
         return ResponseEntity.ok(Map.of(
                 "initialized", initialized,
-                "bootstrapAllowed", !initialized && bootstrapConfigured
+                "bootstrapAllowed", !initialized && bootstrapConfigured,
+                "bootstrapConfigured", bootstrapConfigured
         ));
     }
 
