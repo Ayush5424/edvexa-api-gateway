@@ -146,6 +146,58 @@ After the wait duration in `OPEN` state (e.g., 5 seconds), the circuit enters `H
 
 ---
 
+### Scenario D: Interactive API Playground Execution & Log Tracing
+
+**Objective:**
+Demonstrate executing HTTP requests through the gateway directly from the browser dashboard, inspecting gateway headers, and deep-linking directly to audit logs.
+
+#### 1. Navigate to API Playground
+1. Open the dashboard at `http://localhost:3000`.
+2. Click **API Playground** in the left sidebar navigation (`/playground`).
+
+#### 2. Configure a GET Request to Downstream Test Service
+1. **Method:** Select `GET`.
+2. **Service:** Select `test-service (/test)`.
+3. **Endpoint Path:** Leave empty or type `/` (Gateway URL previews: `/gateway/test`).
+4. **Authentication:** Choose **Select Active Key from Inventory** and pick an active key, or select **Enter API Key Manually** and input an active key.
+5. Click **Send Request**.
+
+#### 3. Inspect Live Response
+- **Status:** `200 OK` (Green badge).
+- **Latency & Size:** Accurate round-trip time in milliseconds and byte count.
+- **Headers:** Inspect `X-Correlation-ID`, `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-Gateway-Service-ID`.
+- **Response Body:** Formatted JSON payload:
+  ```json
+  {
+    "service": "test-service",
+    "status": "healthy",
+    "message": "Request reached the downstream Java service"
+  }
+  ```
+
+#### 4. Trace in Logs
+1. In the Response section, click the **[Trace in Logs]** button adjacent to the correlation ID badge.
+2. The dashboard navigates automatically to `/logs?correlationId=<ID>`.
+3. The Request Logs view filters to the exact request executed in the Playground, displaying client identity, target service, latency, and status code.
+
+#### 5. Test Mutation Request with JSON Body
+1. Return to **API Playground**.
+2. **Method:** Select `POST`.
+3. **Service:** Select `orders-service (/orders)`.
+4. **Endpoint Path:** Type `/api/v1/simulated/orders`.
+5. Under **Body**, provide a JSON payload:
+   ```json
+   {
+     "customerId": "cust-demo-123",
+     "amount": 49.99
+   }
+   ```
+6. Click **Format JSON** to ensure clean formatting.
+7. Click **Send Request**. The simulated downstream order creation response returns `201 Created` or `200 OK`.
+8. Click **Copy as cURL** to copy the command with safe `${GATEWAY_API_KEY}` placeholder.
+
+---
+
 ## 3. Video Recording Script for Self-Recording
 
 If recording a demonstration video, follow this 3-minute script:
@@ -154,6 +206,7 @@ If recording a demonstration video, follow this 3-minute script:
 | :--- | :--- | :--- | :--- |
 | **0:00 - 0:30** | Open Dashboard at `http://localhost:3000` | Overview & Metrics Page | Highlight active services, total request counts, p95/p99 latency charts, and system status badges. |
 | **0:30 - 1:00** | Navigate to Service Registry & API Keys | Services & Keys Pages | Show registered routes (`/test`, `/orders`), timeout configurations, and API key management with prefix masking. |
-| **1:00 - 1:45** | Run Normal Request & Rate Limiting in Terminal | Terminal & Request Logs | Execute `curl` for Scenario A, then rapid requests for Scenario B. Switch to Request Logs page to show `HTTP 200` followed by `HTTP 429` records. |
+| **1:00 - 1:45** | Interactive API Playground & Audit Tracing | Playground & Logs | Demonstrate browser-based request execution, selecting `test-service`, inspecting `X-Correlation-ID` and rate limit headers, and using **Trace in Logs** to correlate with audit entries. |
 | **1:45 - 2:30** | Run Downstream Failure & Recovery | Terminal & Resilience Page | Inject 503 errors via simulator config. Show Circuit Breaker badge turn red (`OPEN`). Reset simulator and show it transition back to green (`CLOSED`). |
 | **2:30 - 3:00** | Open Swagger UI at `http://localhost:8080/swagger-ui/index.html` | Swagger UI Browser Tab | Show documented schemas, auth endpoints, and interactive documentation. |
+

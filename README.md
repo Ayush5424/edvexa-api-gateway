@@ -28,6 +28,7 @@ The Edvexa API Gateway serves as a unified entry point for microservices, provid
   - Paginated audit logging recording latency, outcome categories, circuit breaker states, and error diagnostics.
   - Actuator metrics with latency percentiles (p50, p90, p95, p99) and health checks.
 - **Administrative Monitoring Dashboard:** Interactive React/TypeScript dashboard providing live metrics visualization, service CRUD operations, API key generation with one-time reveal, and log inspection.
+- **Interactive API Playground:** Embedded developer console for testing gateway routes directly from the browser without terminal tools. Features dynamic service discovery, live URL preview, custom headers, query parameters, JSON syntax validation, secure client API key injection, real-time response analysis, cURL export, local history restoration, and direct correlation ID log tracing.
 
 ---
 
@@ -86,9 +87,10 @@ api-gateway/
 │   ├── src/
 │   │   ├── components/             # Layout, Header, Sidebar, MetricCard, Modal, StatusBadge
 │   │   ├── context/                # AuthContext (JWT session state)
-│   │   ├── pages/                  # Overview, Services, ApiKeys, RequestLogs, Resilience, Login
-│   │   ├── services/               # Axios/Fetch API client & service adapters
-│   │   └── test/                   # Vitest unit and integration test suites
+│   │   ├── pages/                  # Overview, Services, ApiKeys, RequestLogs, Resilience, Playground, Login
+│   │   ├── services/               # API clients, auth, services, and playgroundService
+│   │   ├── types/                  # TypeScript domain models and playground interfaces
+│   │   └── test/                   # Vitest unit and integration test suites (including Playground)
 │   ├── package.json
 │   └── vite.config.ts              # Vite server & proxy configuration (Port 3000)
 └── src/
@@ -298,7 +300,31 @@ Interactive OpenAPI 3.0 documentation is enabled:
 
 ---
 
-## 19. Backend and Frontend Testing Commands
+## 19. Interactive API Playground
+
+The integrated API Playground (`/playground`) empowers engineers and operators to test and validate gateway routes interactively:
+- **True Gateway Traversal:** Requests are dispatched via the API Gateway reverse proxy (`/gateway/{prefix}/{subpath}`), exercising the full pipeline: correlation tracking, API key authentication, distributed rate limiting, circuit breaker state machine, downstream routing, and audit logging.
+- **Request Builder:**
+  - Method selector: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`.
+  - Dynamic service picker: Populated from active registered services with real-time target URL preview.
+  - Query parameter and custom header editors with toggle, add, and remove controls.
+  - JSON body editor with real-time syntax error validation and indentation formatter.
+- **Client Authentication:**
+  - Choice of selecting an active provisioned key from inventory or entering a manual API key.
+  - Key secrets are stored strictly in memory for the active browser session; keys are never stored in localStorage or history.
+- **Real-time Response Inspector:**
+  - Status code badge with standard HTTP categorization (2xx green, 3xx blue, 4xx yellow, 5xx red).
+  - Round-trip latency measurement in milliseconds and response payload byte size.
+  - Formatted JSON response viewer with one-click copy.
+  - Headers inspector highlighting `X-Correlation-ID`, `X-RateLimit-*`, `X-Gateway-Service-ID`, and `X-Cache`.
+  - One-click **[Trace in Logs]** button linking directly to the audit log filtered by that exact correlation ID.
+- **Developer Utilities:**
+  - **Copy as cURL:** Generates an equivalent terminal command with a safe `${GATEWAY_API_KEY}` placeholder.
+  - **Recent History:** Persists non-sensitive request configurations in browser storage (method, route, params, headers, status) with one-click restoration.
+
+---
+
+## 20. Backend and Frontend Testing Commands
 
 ### Backend Test Suite (141 tests, 32 classes)
 ```bash
@@ -312,7 +338,7 @@ mvn test "-Dtest=GatewayRoutingServiceTest,GatewayRoutingIntegrationTest,Resilie
 mvn test "-Dtest=JwtTokenProviderTest,AdminSecurityIntegrationTest,AdminBootstrapIntegrationTest,AdminPasswordResetTest,ApiKeyAuthenticationIntegrationTest"
 ```
 
-### Frontend Test Suite (16 tests, 6 test files)
+### Frontend Test Suite (23 tests, 7 test files)
 ```bash
 cd frontend
 npm test -- --run
@@ -320,7 +346,7 @@ npm test -- --run
 
 ---
 
-## 20. Demonstration Walkthrough
+## 21. Demonstration Walkthrough
 
 Refer to [docs/demo.md](file:///c:/Users/dell/Downloads/api-gateway/docs/demo.md) for detailed terminal commands and verification steps:
 - **Scenario A:** Normal request routing with `X-API-Key` and `X-Correlation-ID`.
@@ -330,7 +356,7 @@ Refer to [docs/demo.md](file:///c:/Users/dell/Downloads/api-gateway/docs/demo.md
 
 ---
 
-## 21. CodeZero Usage and Findings
+## 22. CodeZero Usage and Findings
 
 An evaluation of CodeZero (Code0 by Frigga Cloud Labs: `https://frigga.cloud/codezero`) was performed in accordance with assignment requirements.
 - Full details, architecture review, and access evaluation are documented in [docs/codezero.md](file:///c:/Users/dell/Downloads/api-gateway/docs/codezero.md).
@@ -338,7 +364,7 @@ An evaluation of CodeZero (Code0 by Frigga Cloud Labs: `https://frigga.cloud/cod
 
 ---
 
-## 22. Known Limitations and Troubleshooting
+## 23. Known Limitations and Troubleshooting
 
 | Symptom | Cause | Solution |
 | :--- | :--- | :--- |
