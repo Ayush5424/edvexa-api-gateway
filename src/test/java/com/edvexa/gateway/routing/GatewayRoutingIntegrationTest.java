@@ -5,6 +5,10 @@ import com.edvexa.gateway.observability.GatewayRequestLogEntity;
 import com.edvexa.gateway.observability.GatewayRequestLogRepository;
 import com.edvexa.gateway.registry.ServiceEntity;
 import com.edvexa.gateway.registry.ServiceRepository;
+import com.edvexa.gateway.security.apikey.ApiKeyRepository;
+import com.edvexa.gateway.security.apikey.ApiKeyService;
+import com.edvexa.gateway.security.apikey.dto.ApiKeyCreatedResponse;
+import com.edvexa.gateway.security.apikey.dto.CreateApiKeyRequest;
 import com.edvexa.gateway.simulator.OrderSimulatorService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -48,15 +52,32 @@ class GatewayRoutingIntegrationTest {
     private OrderSimulatorService orderSimulatorService;
 
     @Autowired
+    private ApiKeyRepository apiKeyRepository;
+
+    @Autowired
+    private ApiKeyService apiKeyService;
+
+    @Autowired
+    private com.edvexa.gateway.resilience.CircuitBreakerService circuitBreakerService;
+
+    @Autowired
     private ObjectMapper objectMapper;
 
     private String orderServiceId;
+    private String testApiKey;
 
     @BeforeEach
     void setUp() {
         logRepository.deleteAll();
         serviceRepository.deleteAll();
+        apiKeyRepository.deleteAll();
         orderSimulatorService.reset();
+        circuitBreakerService.resetAll();
+
+        ApiKeyCreatedResponse keyResponse = apiKeyService.createApiKey(
+                new CreateApiKeyRequest("client-evaluator", 100)
+        );
+        testApiKey = keyResponse.getApiKey();
 
         ServiceEntity orderService = new ServiceEntity(
                 "srv-order-test",
@@ -71,11 +92,25 @@ class GatewayRoutingIntegrationTest {
         orderServiceId = orderService.getId();
     }
 
+    @org.junit.jupiter.api.AfterEach
+    void tearDown() {
+        orderSimulatorService.reset();
+        circuitBreakerService.resetAll();
+        logRepository.deleteAll();
+        serviceRepository.deleteAll();
+        apiKeyRepository.deleteAll();
+    }
+
+    private HttpHeaders createHeaders() {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("X-API-Key", testApiKey);
+        return headers;
+    }
+
     @Test
     void shouldForwardGetRequestToDownstreamServiceAndRecordAudit() {
-        HttpHeaders headers = new HttpHeaders();
+        HttpHeaders headers = createHeaders();
         headers.set("X-Correlation-ID", "corr-test-100");
-        headers.set("X-Client-ID", "client-evaluator");
 
         HttpEntity<Void> request = new HttpEntity<>(headers);
         ResponseEntity<String> response = restTemplate.exchange(
@@ -101,7 +136,7 @@ class GatewayRoutingIntegrationTest {
 
     @Test
     void shouldForwardPostRequestWithBodyToDownstreamService() {
-        HttpHeaders headers = new HttpHeaders();
+        HttpHeaders headers = createHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.set("X-Correlation-ID", "corr-test-200");
 
@@ -129,8 +164,11 @@ class GatewayRoutingIntegrationTest {
 
     @Test
     void shouldReturn404ForUnknownRouteAndRecordAudit() {
-        ResponseEntity<String> response = restTemplate.getForEntity(
+        HttpEntity<Void> request = new HttpEntity<>(createHeaders());
+        ResponseEntity<String> response = restTemplate.exchange(
                 "/gateway/unknown/endpoint",
+                HttpMethod.GET,
+                request,
                 String.class
         );
 
@@ -144,8 +182,11 @@ class GatewayRoutingIntegrationTest {
         service.setEnabled(false);
         serviceRepository.save(service);
 
-        ResponseEntity<String> response = restTemplate.getForEntity(
+        HttpEntity<Void> request = new HttpEntity<>(createHeaders());
+        ResponseEntity<String> response = restTemplate.exchange(
                 "/gateway/orders",
+                HttpMethod.GET,
+                request,
                 String.class
         );
 
@@ -155,16 +196,85 @@ class GatewayRoutingIntegrationTest {
 
     @Test
     void shouldPropagateDownstreamErrorsWithoutFabrication() {
-        // Configure order simulator to return 503
+        // Configure order simulator to return 503 across all retry attempts
         orderSimulatorService.updateConfig(new com.edvexa.gateway.simulator.dto.SimulatorConfigDto(
-                0, 0.0, 503, 1
+                0, 0.0, 503, 5
         ));
 
-        ResponseEntity<String> response = restTemplate.getForEntity(
+        HttpEntity<Void> request = new HttpEntity<>(createHeaders());
+        ResponseEntity<String> response = restTemplate.exchange(
                 "/gateway/orders",
+                HttpMethod.GET,
+                request,
                 String.class
         );
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+    }
+
+    @Test
+    void shouldRouteToRegisteredServiceWithHostOnlyBaseUrlMatchingGatewayPrefix() {
+        // Register service with host-only base URL (e.g. http://localhost:port) and full path prefix
+        ServiceEntity hostService = new ServiceEntity(
+                "srv-host-test",
+                "test-host-service",
+                "http://localhost:" + port,
+                "/api/v1/simulated/orders",
+                3000,
+                5000,
+                true
+        );
+        serviceRepository.save(hostService);
+
+        HttpEntity<Void> request = new HttpEntity<>(createHeaders());
+        ResponseEntity<String> response = restTemplate.exchange(
+                "/gateway/api/v1/simulated/orders",
+                HttpMethod.GET,
+                request,
+                String.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getHeaders().getFirst("X-Gateway-Service-ID")).isEqualTo("srv-host-test");
+        assertThat(response.getBody()).contains("ORD-101");
+    }
+
+    @Test
+    void shouldSelectMoreSpecificPrefixOverBroaderPrefixInRouting() {
+        ServiceEntity configService = new ServiceEntity(
+                "srv-order-config",
+                "order-config-service",
+                "http://localhost:" + port + "/api/v1/simulated/orders/config",
+                "/orders/config",
+                3000,
+                5000,
+                true
+        );
+        serviceRepository.save(configService);
+
+        HttpEntity<Void> request = new HttpEntity<>(createHeaders());
+        ResponseEntity<String> response = restTemplate.exchange(
+                "/gateway/orders/config",
+                HttpMethod.GET,
+                request,
+                String.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getHeaders().getFirst("X-Gateway-Service-ID")).isEqualTo("srv-order-config");
+    }
+
+    @Test
+    void shouldRejectPartialSegmentNamePrefixMatching() {
+        HttpEntity<Void> request = new HttpEntity<>(createHeaders());
+        ResponseEntity<String> response = restTemplate.exchange(
+                "/gateway/orders-different",
+                HttpMethod.GET,
+                request,
+                String.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(response.getBody()).contains("No registered service matches route");
     }
 }

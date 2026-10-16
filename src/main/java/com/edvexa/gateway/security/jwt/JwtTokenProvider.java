@@ -22,10 +22,13 @@ public class JwtTokenProvider {
     private final long expirationMs;
 
     public JwtTokenProvider(
-            @Value("${gateway.security.jwt.secret:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}") String secret,
-            @Value("${gateway.security.jwt.expiration-ms:86400000}") long expirationMs
+            @Value("${gateway.security.jwt.secret:${GATEWAY_JWT_SECRET:${JWT_SECRET:}}}") String secret,
+            @Value("${gateway.security.jwt.expiration-ms:${GATEWAY_JWT_EXPIRATION_MS:${JWT_EXPIRATION_MS:86400000}}}") long expirationMs
     ) {
-        byte[] keyBytes = secret.getBytes(StandardCharsets.UTF_8);
+        if (secret == null || secret.isBlank()) {
+            throw new IllegalStateException("JWT signing secret is required but not configured. Set 'gateway.security.jwt.secret' or environment variable 'GATEWAY_JWT_SECRET' / 'JWT_SECRET'.");
+        }
+        byte[] keyBytes = secret.trim().getBytes(StandardCharsets.UTF_8);
         if (keyBytes.length < 32) {
             throw new IllegalArgumentException("JWT signing secret key must be at least 256 bits (32 bytes) long");
         }

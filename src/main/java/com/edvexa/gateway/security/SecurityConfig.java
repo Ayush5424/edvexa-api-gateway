@@ -29,10 +29,19 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final com.edvexa.gateway.security.apikey.ApiKeyAuthenticationFilter apiKeyAuthenticationFilter;
+    private final com.edvexa.gateway.ratelimit.RateLimitingFilter rateLimitingFilter;
     private final ObjectMapper objectMapper;
 
-    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter, ObjectMapper objectMapper) {
+    public SecurityConfig(
+            JwtAuthenticationFilter jwtAuthenticationFilter,
+            com.edvexa.gateway.security.apikey.ApiKeyAuthenticationFilter apiKeyAuthenticationFilter,
+            com.edvexa.gateway.ratelimit.RateLimitingFilter rateLimitingFilter,
+            ObjectMapper objectMapper
+    ) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+        this.apiKeyAuthenticationFilter = apiKeyAuthenticationFilter;
+        this.rateLimitingFilter = rateLimitingFilter;
         this.objectMapper = objectMapper;
     }
 
@@ -95,15 +104,19 @@ public class SecurityConfig {
                                 "/swagger-ui.html",
                                 "/v3/api-docs/**",
                                 "/api/v1/auth/login",
+                                "/api/v1/auth/bootstrap",
+                                "/api/v1/auth/status",
                                 "/api/v1/simulated/**",
                                 "/gateway/**",
                                 "/test/**"
                         ).permitAll()
                         // Protected administrative endpoints requiring ROLE_ADMIN
-                        .requestMatchers("/api/v1/services/**", "/api/v1/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/api/v1/services/**", "/api/v1/admin/**", "/api/v1/api-keys/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(apiKeyAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(rateLimitingFilter, com.edvexa.gateway.security.apikey.ApiKeyAuthenticationFilter.class);
 
         return http.build();
     }

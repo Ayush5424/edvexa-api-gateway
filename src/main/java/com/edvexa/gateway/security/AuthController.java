@@ -1,5 +1,7 @@
 package com.edvexa.gateway.security;
 
+import com.edvexa.gateway.security.dto.AdminBootstrapRequest;
+import com.edvexa.gateway.security.dto.AdminBootstrapResponse;
 import com.edvexa.gateway.security.dto.LoginRequest;
 import com.edvexa.gateway.security.dto.LoginResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -7,6 +9,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -36,6 +39,32 @@ public class AuthController {
     })
     public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
         return ResponseEntity.ok(authService.login(request));
+    }
+
+    @PostMapping("/bootstrap")
+    @Operation(summary = "Provision the first administrator account using a secure bootstrap secret")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "First administrator account created"),
+            @ApiResponse(responseCode = "400", description = "Validation error"),
+            @ApiResponse(responseCode = "403", description = "Invalid bootstrap secret or bootstrap disabled"),
+            @ApiResponse(responseCode = "409", description = "Administrator already exists")
+    })
+    public ResponseEntity<AdminBootstrapResponse> bootstrap(@Valid @RequestBody AdminBootstrapRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(authService.bootstrapAdmin(request));
+    }
+
+    @GetMapping("/status")
+    @Operation(summary = "Check authentication system initialization status")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Authentication initialization status")
+    })
+    public ResponseEntity<Map<String, Object>> getStatus() {
+        boolean initialized = authService.isAdminInitialized();
+        boolean bootstrapConfigured = authService.isBootstrapConfigured();
+        return ResponseEntity.ok(Map.of(
+                "initialized", initialized,
+                "bootstrapAllowed", !initialized && bootstrapConfigured
+        ));
     }
 
     @GetMapping("/me")

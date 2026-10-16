@@ -31,7 +31,10 @@ public class GatewayRoutingController {
             subpath = "/";
         }
 
-        String clientId = request.getHeader("X-Client-ID");
+        String clientId = (String) request.getAttribute(com.edvexa.gateway.security.apikey.ApiKeyAuthenticationFilter.ATTR_CLIENT_ID);
+        if (clientId == null || clientId.isBlank()) {
+            clientId = request.getHeader("X-Client-ID");
+        }
         if (clientId == null || clientId.isBlank()) {
             clientId = request.getHeader("X-API-Key");
         }

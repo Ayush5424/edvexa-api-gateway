@@ -32,7 +32,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ActiveProfiles("test")
 @Import(TestRedisConfig.class)
 @WithMockUser(roles = "ADMIN")
-@Transactional
 class ServiceRegistryControllerTest {
 
     @Autowired
@@ -46,6 +45,11 @@ class ServiceRegistryControllerTest {
 
     @BeforeEach
     void setUp() {
+        serviceRepository.deleteAll();
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void tearDown() {
         serviceRepository.deleteAll();
     }
 
