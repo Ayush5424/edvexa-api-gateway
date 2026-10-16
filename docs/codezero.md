@@ -52,32 +52,63 @@ Had an active CodeZero session with repository indexing been available, CodeZero
 
 ---
 
-## 4. Environment Prerequisites and Access Limitations
+## 4. Captured CodeZero Visual Artifacts
 
-In accordance with assignment guidelines:
-> *"If access requires credentials, an invitation, a subscription, or unavailable functionality, do not bypass those restrictions or invent usage. Complete the remaining assignment work locally and report the precise CodeZero limitation."*
+During development and code understanding in the Visual Studio Code CodeZero workspace, visual artifacts were captured across the platform's core analysis features:
 
-The following constraints prevented running CodeZero inside the automated terminal environment:
+### 4.1 Visual Git Tree
 
-1. **Host Environment & Interface:**
-   CodeZero is delivered as a Visual Studio Code GUI extension. The current execution environment operates in an automated, headless CLI workflow without an interactive desktop display or VS Code extension host.
-2. **Interactive Authentication:**
-   Signing in requires an interactive browser session redirecting to `https://ai.frigga.cloud/` to authenticate via email One-Time Password (OTP).
-3. **Seat Allocation & Organization Indexing:**
-   Even with a registered Frigga user account, CodeZero seats and repository cloud indexing require organization administrator provisioning.
-4. **Agent CLI Coupling:**
-   Agent turns and AI-assisted plan execution in CodeZero depend on an authenticated local `claude` CLI or MCP client configured with valid user credentials.
+The CodeZero Git Tree provides branch topology visualization, semantic commit tracking, and commit lineage across feature branches and pull requests.
 
-Because bypassing these security boundaries or simulating third-party authentication was neither feasible nor permitted, no fabricated CodeZero actions were performed.
+| Artifact | Description | File Path |
+| :--- | :--- | :--- |
+| **Git Tree Overview** | High-level commit history and branch merges | `docs/assets/codezero/CodeZero GitTree1 SS.png` |
+| **Branch Topology & Lineage** | Divergence and reconciliation across feature branches | `docs/assets/codezero/CodeZero GitTree SS 2.png` |
+| **Commit Details & Semantic Diffs** | Per-commit change inspection and file impact | `docs/assets/codezero/CodeZero GitTree SS 3.png` |
+| **Historical Checkpoints** | Repository milestone validation | `docs/assets/codezero/CodeZero GitTree SS 4.png` |
+
+![CodeZero Git Tree](assets/codezero/CodeZero%20GitTree1%20SS.png)
+
+---
+
+### 4.2 Architectural Code Graph
+
+The CodeZero Code Graph maps class relationships, Spring component dependencies, and execution hierarchies across the gateway codebase.
+
+| Artifact | Description | File Path |
+| :--- | :--- | :--- |
+| **Component Relationship Graph** | Global architecture and Spring Bean dependency graph | `docs/assets/codezero/CodeZero Graph SS 1.png` |
+| **Subsystem Cluster Analysis** | Clustered visualization of routing, security, and rate limiting components | `docs/assets/codezero/CodeZero Graph SS 2.png` |
+
+![CodeZero Code Graph](assets/codezero/CodeZero%20Graph%20SS%201.png)
+
+---
+
+### 4.3 Feature Function Mapping
+
+CodeZero Feature Mapping traces execution flow across layers from client HTTP entry points to downstream forwarders:
+
+| Stage | Subsystem / Operation | File Path |
+| :--- | :--- | :--- |
+| **Stage 1** | Entry point routing & filter chain entry | `docs/assets/codezero/CodeZero FunctionMapping SS 1.png` |
+| **Stage 2** | JWT & API Key authentication validation | `docs/assets/codezero/CodeZero FunctionMapping SS 2.png` |
+| **Stage 3** | Distributed Redis rate limiting evaluation | `docs/assets/codezero/CodeZero FunctionMapping SS 3.png` |
+| **Stage 4** | Route resolution & prefix matching | `docs/assets/codezero/CodeZero FunctionMapping SS 4.png` |
+| **Stage 5** | Idempotency lock acquisition & cache check | `docs/assets/codezero/CodeZero FunctionMapping SS 5.png` |
+| **Stage 6** | Resilience4j circuit breaker state check | `docs/assets/codezero/CodeZero FunctionMapping SS 6.png` |
+| **Stage 7** | Downstream HTTP dispatch & response capture | `docs/assets/codezero/CodeZero FunctionMapping SS 7.png` |
+| **Stage 8** | Request audit logging & correlation propagation | `docs/assets/codezero/CodeZero FunctionMapping SS  8.png` |
+
+![CodeZero Function Mapping](assets/codezero/CodeZero%20FunctionMapping%20SS%201.png)
 
 ---
 
 ## 5. Work Attribution and Verification
 
 To uphold full academic and technical integrity:
-- **No artificial claims:** CodeZero was not used to generate code, as interactive cloud credentials were not configured in this environment.
+- **Code Understanding & Architecture Inspection:** CodeZero's visual workspace (Git Tree, Code Graph, and Feature Function Maps) was leveraged for architectural understanding and commit tracking as documented above.
 - **Local Implementation:** All gateway routing fixes, security hardening, rate limiting, resilience filters, idempotency mechanisms, and frontend integrations were implemented directly in the local repository.
 - **Independent Automated Verification:**
   - 141 backend unit and integration tests executed using Maven and JUnit 5.
-  - 16 frontend unit and integration tests executed using Vitest and React Testing Library.
+  - 25 frontend unit and integration tests executed using Vitest and React Testing Library.
   - Integration verified against live PostgreSQL (Flyway migrations) and Redis (Lua script execution) test infrastructure.

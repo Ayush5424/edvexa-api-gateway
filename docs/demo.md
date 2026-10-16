@@ -13,6 +13,8 @@ Ensure the required local components are running:
 - **Downstream Services**: Port `8081` (Standalone Java service) and Port `8080` (Simulated Orders/Payments under `/api/v1/simulated/**`)
 - **Monitoring Dashboard**: Port `3000` (`http://localhost:3000`)
 
+![Dashboard Overview](assets/screenshots/Edvexa%20Overview%20SS1.png)
+
 ---
 
 ## 2. Demonstration Scenarios
@@ -46,6 +48,8 @@ Content-Length: 79
   "message": "Request reached the downstream Java service"
 }
 ```
+
+![Terminal Verification](assets/screenshots/Edvexa%20Terminal%20SS.png)
 
 #### 3. What Occurred Behind the Scenes:
 1. `CorrelationIdFilter` captured or generated `demo-corr-001` and placed it into thread-local context.
@@ -144,6 +148,8 @@ curl -X POST http://localhost:8080/api/v1/simulated/orders/reset
 #### 5. Verify Recovery
 After the wait duration in `OPEN` state (e.g., 5 seconds), the circuit enters `HALF_OPEN`. Permitted trial calls succeed against the healthy simulator, transitioning the circuit breaker back to `CLOSED`.
 
+![Resilience and Circuit Breaker Monitoring](assets/screenshots/Edvexa%20RCB%20SS.png)
+
 ---
 
 ### Scenario D: Interactive API Playground Execution & Log Tracing
@@ -175,10 +181,14 @@ Demonstrate executing HTTP requests through the gateway directly from the browse
   }
   ```
 
+![API Playground Execution](assets/screenshots/API%20PlayGround.png)
+
 #### 4. Trace in Logs
 1. In the Response section, click the **[Trace in Logs]** button adjacent to the correlation ID badge.
 2. The dashboard navigates automatically to `/logs?correlationId=<ID>`.
 3. The Request Logs view filters to the exact request executed in the Playground, displaying client identity, target service, latency, and status code.
+
+![Request Logs & Correlation Tracing](assets/screenshots/Edvexa%20Request%20Logs.png)
 
 #### 5. Test Mutation Request with JSON Body
 1. Return to **API Playground**.

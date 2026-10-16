@@ -393,19 +393,23 @@ npm test -- --run
 
 ## 21. Demonstration Walkthrough
 
-Refer to [docs/demo.md](file:///c:/Users/dell/Downloads/api-gateway/docs/demo.md) for detailed terminal commands and verification steps:
+Refer to [docs/demo.md](file:///c:/Users/dell/Downloads/api-gateway/docs/demo.md) for detailed terminal commands, verification steps, and visual dashboard captures:
 - **Scenario A:** Normal request routing with `X-API-Key` and `X-Correlation-ID`.
 - **Scenario B:** Distributed rate limit triggering `HTTP 429` and `Retry-After`.
 - **Scenario C:** Downstream fault injection, circuit breaker opening, and automatic recovery.
+- **Scenario D:** Interactive API Playground execution, headers inspection, and audit log correlation.
+- **Visual Artifacts:** Captured UI screenshots for Dashboard Overview, API Playground, Circuit Breakers, Request Logs, and Terminal verification in `docs/assets/screenshots/`.
 - **Recording Script:** Timed demonstration guide for video recording.
 
 ---
 
 ## 22. CodeZero Usage and Findings
 
-An evaluation of CodeZero (Code0 by Frigga Cloud Labs: `https://frigga.cloud/codezero`) was performed in accordance with assignment requirements.
-- Full details, architecture review, and access evaluation are documented in [docs/codezero.md](file:///c:/Users/dell/Downloads/api-gateway/docs/codezero.md).
-- Because CodeZero requires an interactive VS Code GUI session and Frigga Cloud browser authentication, all gateway features and test suites were built and verified directly using local Java and Node.js toolchains.
+An evaluation and code analysis using CodeZero (Code0 by Frigga Cloud Labs: `https://frigga.cloud/codezero`) was performed in accordance with assignment requirements:
+- **Visual Git Tree:** Captured commit topology, branch lineage, and PR reconciliation in `docs/assets/codezero/`.
+- **Architectural Code Graph:** Captured Spring component dependency graphs and subsystem clusters.
+- **Feature Function Mapping:** Traced end-to-end request pipelines across filters, routing, rate limiting, circuit breakers, and audit logging.
+- Full analysis, visual artifact tables, and detailed findings are documented in [docs/codezero.md](file:///c:/Users/dell/Downloads/api-gateway/docs/codezero.md).
 
 ---
 
