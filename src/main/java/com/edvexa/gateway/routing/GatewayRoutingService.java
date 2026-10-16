@@ -75,6 +75,8 @@ public class GatewayRoutingService {
         ServiceEntity service = resolveService(subpath);
         if (service == null) {
             long latency = System.currentTimeMillis() - startTime;
+            log.warn("Routing failed: no registered service matches route [{}] (subpath [{}]), correlationId={}",
+                    requestPath, subpath, correlationId);
             requestAuditService.recordRequest(
                     correlationId, clientId, null, method, requestPath, 404, latency, 0, "CLOSED", "No route found"
             );
@@ -83,6 +85,8 @@ public class GatewayRoutingService {
 
         if (!service.isEnabled()) {
             long latency = System.currentTimeMillis() - startTime;
+            log.warn("Routing rejected: service [{}] is disabled, route [{}], correlationId={}",
+                    service.getName(), requestPath, correlationId);
             requestAuditService.recordRequest(
                     correlationId, clientId, service.getId(), method, requestPath, 503, latency, 0, "CLOSED", "Service disabled"
             );
@@ -149,7 +153,8 @@ public class GatewayRoutingService {
         HttpHeaders forwardHeaders = headerFilter.filterHeaders(request.getHeaderNames(), request::getHeaders);
         RestClient restClient = clientProvider.getRestClientForService(service);
 
-        log.debug("Routing request correlationId={} to targetUri={}", correlationId, targetUri);
+        log.info("Routing request correlationId={} serviceId={} method={} to targetUri={}",
+                correlationId, serviceId, method, targetUri);
 
         // 5. Forward request with bounded retry, circuit breaker tracking, and idempotency completion
         int retriesRecorded = 0;
@@ -171,6 +176,7 @@ public class GatewayRoutingService {
                                 int rawStatusCode = clientResp.getStatusCode().value();
                                 byte[] responseBytes = clientResp.getBody().readAllBytes();
                                 HttpHeaders responseHeaders = headerFilter.filterDownstreamResponseHeaders(clientResp.getHeaders());
+                                responseHeaders.set("X-Gateway-Service-ID", serviceId);
 
                                 return ResponseEntity.status(rawStatusCode)
                                         .headers(responseHeaders)
@@ -276,31 +282,70 @@ public class GatewayRoutingService {
         }
     }
 
-    private ServiceEntity resolveService(String subpath) {
-        String path = subpath.startsWith("/") ? subpath : "/" + subpath;
+    ServiceEntity resolveService(String subpath) {
+        if (subpath == null || subpath.isBlank()) {
+            return null;
+        }
+
+        String normalizedPath = normalizePath(subpath);
         List<ServiceEntity> services = serviceRepository.findAll();
 
         return services.stream()
-                .filter(s -> path.startsWith(s.getPathPrefix()))
-                .max(Comparator.comparingInt(s -> s.getPathPrefix().length()))
+                .filter(s -> matchesPrefix(normalizedPath, s.getPathPrefix()))
+                .max(Comparator.comparingInt(s -> normalizePath(s.getPathPrefix()).length()))
                 .orElse(null);
     }
 
-    private URI buildDownstreamUri(ServiceEntity service, String subpath, String queryString) {
-        String base = service.getBaseUrl();
-        if (base.endsWith("/")) {
+    boolean matchesPrefix(String normalizedPath, String rawPrefix) {
+        if (rawPrefix == null || rawPrefix.isBlank()) {
+            return false;
+        }
+        String normalizedPrefix = normalizePath(rawPrefix);
+        if (normalizedPrefix.equals("/")) {
+            return true;
+        }
+        return normalizedPath.equals(normalizedPrefix) || normalizedPath.startsWith(normalizedPrefix + "/");
+    }
+
+    String normalizePath(String path) {
+        if (path == null || path.isBlank()) {
+            return "/";
+        }
+        String p = path.trim();
+        if (!p.startsWith("/")) {
+            p = "/" + p;
+        }
+        while (p.length() > 1 && p.endsWith("/")) {
+            p = p.substring(0, p.length() - 1);
+        }
+        return p;
+    }
+
+    URI buildDownstreamUri(ServiceEntity service, String subpath, String queryString) {
+        String base = service.getBaseUrl() != null ? service.getBaseUrl().trim() : "";
+        while (base.endsWith("/")) {
             base = base.substring(0, base.length() - 1);
         }
 
-        String path = subpath.startsWith("/") ? subpath : "/" + subpath;
-        String prefix = service.getPathPrefix();
+        String normalizedPrefix = normalizePath(service.getPathPrefix());
+        String normalizedSubpath = normalizePath(subpath);
 
-        String remaining = path.substring(prefix.length());
-        if (!remaining.isEmpty() && !remaining.startsWith("/")) {
-            remaining = "/" + remaining;
+        String forwardPath;
+        if (base.endsWith(normalizedPrefix)) {
+            // Base URL already includes the path prefix at its end
+            // (e.g., base = "http://localhost:8080/api/v1/simulated/orders", prefix = "/orders")
+            forwardPath = normalizedSubpath.substring(normalizedPrefix.length());
+        } else {
+            // Base URL is host/port only or does not end with prefix
+            // (e.g., base = "http://localhost:8081", prefix = "/test") -> downstream expects "/test"
+            forwardPath = subpath.startsWith("/") ? subpath : "/" + subpath;
         }
 
-        StringBuilder uriBuilder = new StringBuilder(base).append(remaining);
+        if (!forwardPath.isEmpty() && !forwardPath.startsWith("/")) {
+            forwardPath = "/" + forwardPath;
+        }
+
+        StringBuilder uriBuilder = new StringBuilder(base).append(forwardPath);
         if (queryString != null && !queryString.isBlank()) {
             uriBuilder.append("?").append(queryString);
         }

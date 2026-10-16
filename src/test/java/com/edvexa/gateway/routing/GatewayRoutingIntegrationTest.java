@@ -211,4 +211,70 @@ class GatewayRoutingIntegrationTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
     }
+
+    @Test
+    void shouldRouteToRegisteredServiceWithHostOnlyBaseUrlMatchingGatewayPrefix() {
+        // Register service with host-only base URL (e.g. http://localhost:port) and full path prefix
+        ServiceEntity hostService = new ServiceEntity(
+                "srv-host-test",
+                "test-host-service",
+                "http://localhost:" + port,
+                "/api/v1/simulated/orders",
+                3000,
+                5000,
+                true
+        );
+        serviceRepository.save(hostService);
+
+        HttpEntity<Void> request = new HttpEntity<>(createHeaders());
+        ResponseEntity<String> response = restTemplate.exchange(
+                "/gateway/api/v1/simulated/orders",
+                HttpMethod.GET,
+                request,
+                String.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getHeaders().getFirst("X-Gateway-Service-ID")).isEqualTo("srv-host-test");
+        assertThat(response.getBody()).contains("ORD-101");
+    }
+
+    @Test
+    void shouldSelectMoreSpecificPrefixOverBroaderPrefixInRouting() {
+        ServiceEntity configService = new ServiceEntity(
+                "srv-order-config",
+                "order-config-service",
+                "http://localhost:" + port + "/api/v1/simulated/orders/config",
+                "/orders/config",
+                3000,
+                5000,
+                true
+        );
+        serviceRepository.save(configService);
+
+        HttpEntity<Void> request = new HttpEntity<>(createHeaders());
+        ResponseEntity<String> response = restTemplate.exchange(
+                "/gateway/orders/config",
+                HttpMethod.GET,
+                request,
+                String.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getHeaders().getFirst("X-Gateway-Service-ID")).isEqualTo("srv-order-config");
+    }
+
+    @Test
+    void shouldRejectPartialSegmentNamePrefixMatching() {
+        HttpEntity<Void> request = new HttpEntity<>(createHeaders());
+        ResponseEntity<String> response = restTemplate.exchange(
+                "/gateway/orders-different",
+                HttpMethod.GET,
+                request,
+                String.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(response.getBody()).contains("No registered service matches route");
+    }
 }
