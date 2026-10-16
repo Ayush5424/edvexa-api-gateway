@@ -9,6 +9,7 @@ import { ServiceRegistryPage } from './pages/ServiceRegistryPage';
 import { ApiKeysPage } from './pages/ApiKeysPage';
 import { RequestLogsPage } from './pages/RequestLogsPage';
 import { ResiliencePage } from './pages/ResiliencePage';
+import { PlaygroundPage } from './pages/PlaygroundPage';
 
 export const App: React.FC = () => {
   return (
@@ -39,6 +40,14 @@ export const App: React.FC = () => {
               element={
                 <Layout>
                   <ApiKeysPage />
+                </Layout>
+              }
+            />
+            <Route
+              path="/playground"
+              element={
+                <Layout>
+                  <PlaygroundPage />
                 </Layout>
               }
             />

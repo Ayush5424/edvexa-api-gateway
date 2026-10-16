@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Search, Copy, Check, Filter, Info, X } from 'lucide-react';
 import { Header } from '../components/layout/Header';
 import { StatusBadge } from '../components/common/StatusBadge';
@@ -24,12 +25,19 @@ export const RequestLogsPage: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  // Filters
+  const [searchParams] = useSearchParams();
   const [serviceFilter, setServiceFilter] = useState('');
   const [clientFilter, setClientFilter] = useState('');
   const [outcomeFilter, setOutcomeFilter] = useState('');
-  const [correlationSearch, setCorrelationSearch] = useState('');
+  const [correlationSearch, setCorrelationSearch] = useState(() => searchParams.get('correlationId') || '');
   const [currentPage, setCurrentPage] = useState(0);
+
+  useEffect(() => {
+    const urlCorrId = searchParams.get('correlationId');
+    if (urlCorrId) {
+      setCorrelationSearch(urlCorrId);
+    }
+  }, [searchParams]);
 
   // Selected log for detailed diagnostic view
   const [selectedLog, setSelectedLog] = useState<GatewayRequestLog | null>(null);

@@ -6,6 +6,7 @@ import {
   Key,
   FileText,
   ShieldAlert,
+  Terminal,
   LogOut,
   Layers,
 } from 'lucide-react';
@@ -18,6 +19,7 @@ export const Sidebar: React.FC = () => {
     { to: '/', label: 'Overview', icon: Activity },
     { to: '/services', label: 'Service Registry', icon: Server },
     { to: '/api-keys', label: 'API Keys', icon: Key },
+    { to: '/playground', label: 'API Playground', icon: Terminal },
     { to: '/logs', label: 'Request Logs', icon: FileText },
     { to: '/resilience', label: 'Resilience & Circuit Breakers', icon: ShieldAlert },
   ];
