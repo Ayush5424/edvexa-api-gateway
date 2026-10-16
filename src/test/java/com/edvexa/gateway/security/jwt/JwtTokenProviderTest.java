@@ -4,6 +4,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class JwtTokenProviderTest {
 
@@ -46,5 +47,27 @@ class JwtTokenProviderTest {
         assertThat(tokenProvider.validateToken(null)).isFalse();
         assertThat(tokenProvider.validateToken("")).isFalse();
         assertThat(tokenProvider.validateToken("   ")).isFalse();
+    }
+
+    @Test
+    void shouldFailWhenSecretIsMissingOrBlank() {
+        assertThatThrownBy(() -> new JwtTokenProvider(null, 3600000L))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("JWT signing secret is required");
+
+        assertThatThrownBy(() -> new JwtTokenProvider("", 3600000L))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("JWT signing secret is required");
+
+        assertThatThrownBy(() -> new JwtTokenProvider("   ", 3600000L))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("JWT signing secret is required");
+    }
+
+    @Test
+    void shouldFailWhenSecretIsShorterThan32Bytes() {
+        assertThatThrownBy(() -> new JwtTokenProvider("short-secret-under-32-bytes", 3600000L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("at least 256 bits (32 bytes)");
     }
 }
