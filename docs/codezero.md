@@ -60,14 +60,18 @@ During development and code understanding in the Visual Studio Code CodeZero wor
 
 The CodeZero Git Tree provides branch topology visualization, semantic commit tracking, and commit lineage across feature branches and pull requests.
 
-| Artifact | Description | File Path |
-| :--- | :--- | :--- |
-| **Git Tree Overview** | High-level commit history and branch merges | `docs/assets/codezero/CodeZero GitTree1 SS.png` |
-| **Branch Topology & Lineage** | Divergence and reconciliation across feature branches | `docs/assets/codezero/CodeZero GitTree SS 2.png` |
-| **Commit Details & Semantic Diffs** | Per-commit change inspection and file impact | `docs/assets/codezero/CodeZero GitTree SS 3.png` |
-| **Historical Checkpoints** | Repository milestone validation | `docs/assets/codezero/CodeZero GitTree SS 4.png` |
+#### Git Tree Overview & Commit History
+![CodeZero Git Tree Overview](assets/codezero/CodeZero%20GitTree1%20SS.png)
 
-![CodeZero Git Tree](assets/codezero/CodeZero%20GitTree1%20SS.png)
+#### Branch Topology & Merges
+![CodeZero Git Tree Topology](assets/codezero/CodeZero%20GitTree%20SS%202.png)
+
+#### Commit Details & File Diffs
+![CodeZero Git Tree Diffs](assets/codezero/CodeZero%20GitTree%20SS%203.png)
+![CodeZero Git Tree Commit Inspection](assets/codezero/CodeZero%20GitTree%20SS3.png)
+
+#### Branch Lineage Checkpoints
+![CodeZero Git Tree Lineage](assets/codezero/CodeZero%20GitTree%20SS%204.png)
 
 ---
 
@@ -75,12 +79,11 @@ The CodeZero Git Tree provides branch topology visualization, semantic commit tr
 
 The CodeZero Code Graph maps class relationships, Spring component dependencies, and execution hierarchies across the gateway codebase.
 
-| Artifact | Description | File Path |
-| :--- | :--- | :--- |
-| **Component Relationship Graph** | Global architecture and Spring Bean dependency graph | `docs/assets/codezero/CodeZero Graph SS 1.png` |
-| **Subsystem Cluster Analysis** | Clustered visualization of routing, security, and rate limiting components | `docs/assets/codezero/CodeZero Graph SS 2.png` |
+#### Component Relationship Graph & Spring Dependencies
+![CodeZero Component Relationship Graph](assets/codezero/CodeZero%20Graph%20SS%201.png)
 
-![CodeZero Code Graph](assets/codezero/CodeZero%20Graph%20SS%201.png)
+#### Subsystem Cluster Analysis & Architecture
+![CodeZero Subsystem Cluster Analysis](assets/codezero/CodeZero%20Graph%20SS%202.png)
 
 ---
 
@@ -88,18 +91,29 @@ The CodeZero Code Graph maps class relationships, Spring component dependencies,
 
 CodeZero Feature Mapping traces execution flow across layers from client HTTP entry points to downstream forwarders:
 
-| Stage | Subsystem / Operation | File Path |
-| :--- | :--- | :--- |
-| **Stage 1** | Entry point routing & filter chain entry | `docs/assets/codezero/CodeZero FunctionMapping SS 1.png` |
-| **Stage 2** | JWT & API Key authentication validation | `docs/assets/codezero/CodeZero FunctionMapping SS 2.png` |
-| **Stage 3** | Distributed Redis rate limiting evaluation | `docs/assets/codezero/CodeZero FunctionMapping SS 3.png` |
-| **Stage 4** | Route resolution & prefix matching | `docs/assets/codezero/CodeZero FunctionMapping SS 4.png` |
-| **Stage 5** | Idempotency lock acquisition & cache check | `docs/assets/codezero/CodeZero FunctionMapping SS 5.png` |
-| **Stage 6** | Resilience4j circuit breaker state check | `docs/assets/codezero/CodeZero FunctionMapping SS 6.png` |
-| **Stage 7** | Downstream HTTP dispatch & response capture | `docs/assets/codezero/CodeZero FunctionMapping SS 7.png` |
-| **Stage 8** | Request audit logging & correlation propagation | `docs/assets/codezero/CodeZero FunctionMapping SS  8.png` |
+#### Stage 1: Entry Point Routing & Filter Chain Entry
+![CodeZero Function Mapping - Stage 1](assets/codezero/CodeZero%20FunctionMapping%20SS%201.png)
 
-![CodeZero Function Mapping](assets/codezero/CodeZero%20FunctionMapping%20SS%201.png)
+#### Stage 2: JWT & API Key Authentication Validation
+![CodeZero Function Mapping - Stage 2](assets/codezero/CodeZero%20FunctionMapping%20SS%202.png)
+
+#### Stage 3: Distributed Redis Rate Limiting Evaluation
+![CodeZero Function Mapping - Stage 3](assets/codezero/CodeZero%20FunctionMapping%20SS%203.png)
+
+#### Stage 4: Route Resolution & Longest Prefix Matching
+![CodeZero Function Mapping - Stage 4](assets/codezero/CodeZero%20FunctionMapping%20SS%204.png)
+
+#### Stage 5: Idempotency Lock Acquisition & Cache Check
+![CodeZero Function Mapping - Stage 5](assets/codezero/CodeZero%20FunctionMapping%20SS%205.png)
+
+#### Stage 6: Resilience4j Circuit Breaker State Check
+![CodeZero Function Mapping - Stage 6](assets/codezero/CodeZero%20FunctionMapping%20SS%206.png)
+
+#### Stage 7: Downstream HTTP Dispatch & Response Handling
+![CodeZero Function Mapping - Stage 7](assets/codezero/CodeZero%20FunctionMapping%20SS%207.png)
+
+#### Stage 8: Request Audit Logging & Correlation Propagation
+![CodeZero Function Mapping - Stage 8](assets/codezero/CodeZero%20FunctionMapping%20SS%20%208.png)
 
 ---
 

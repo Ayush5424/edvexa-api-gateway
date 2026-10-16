@@ -13,7 +13,12 @@ Ensure the required local components are running:
 - **Downstream Services**: Port `8081` (Standalone Java service) and Port `8080` (Simulated Orders/Payments under `/api/v1/simulated/**`)
 - **Monitoring Dashboard**: Port `3000` (`http://localhost:3000`)
 
+#### Dashboard Overview & Latency Percentiles
 ![Dashboard Overview](assets/screenshots/Edvexa%20Overview%20SS1.png)
+![Live Traffic Metrics](assets/screenshots/Edvexa%20Overveiw%20ss2.png)
+
+#### Dynamic Service Registry Management
+![Service Registry Management](assets/screenshots/Edvexa%20SR%20SS.png)
 
 ---
 
